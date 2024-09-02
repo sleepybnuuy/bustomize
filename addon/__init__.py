@@ -25,6 +25,7 @@ import bpy
 import base64
 import json
 import zlib
+import mathutils
 from collections import defaultdict
 
 class BustomizePanel(bpy.types.Panel):
@@ -69,10 +70,57 @@ class Bustomize(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         settings: Settings = context.scene.bustomize_settings
+        if settings.was_applied:
+            self.report({'ERROR'}, 'C+ scaling was already applied! Reset then try again')
+            return {'CANCELLED'}
+
         ver, cplus_dict = translate_hash(settings.cplus_hash)
-        print(f'c+ version: {ver}')
         bonescale_dict = get_bone_scaling(cplus_dict)
-        print(f'bonescale dict: {bonescale_dict}')
+        target_armature = settings.target_armature
+        if not target_armature:
+            self.report({'ERROR'}, 'Target armature DNE')
+            return {'CANCELLED'}
+        if not target_armature.type == "ARMATURE":
+            self.report({'ERROR'}, 'Did not select a valid armature object')
+            return {'CANCELLED'}
+
+        # validate target armature contents
+        # only apply scaling to pose bones when we can safely revert
+        target_bone_names = []
+        for bone in target_armature.data.bones:
+            if bone.inherit_scale != "FULL":
+                self.report({'ERROR'}, f'Armature contains bone {bone.name} which does not inherit parent bone scaling')
+                return {'CANCELLED'}
+            target_bone_names.append(bone.name)
+
+        # TODO: Armature contains bone j_asi_b_l with unexpected scale: <Vector (1.0000, 1.0000, 1.0000)>
+        # for posebone in target_armature.pose.bones:
+        #     if posebone.scale != mathutils.Vector((1.0, 1.0, 1.0)):
+        #         self.report({'ERROR'}, f'Armature contains bone {posebone.name} with unexpected scale: {posebone.scale}')
+        #         return {'CANCELLED'}
+
+        missing_bones = []
+        for bonescale_name in bonescale_dict.keys():
+            if bonescale_name not in target_bone_names:
+                missing_bones.append(bonescale_name)
+        if len(missing_bones) == len(bonescale_dict.keys()):
+            self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
+            return {'CANCELLED'}
+        elif len(missing_bones) > 1:
+            self.report({'WARNING'}, f'Skipped missing bones: {", ".join(missing_bones)}')
+
+        # end validation
+
+        # unlink parent bone scaling for ALL bones
+        for bone in target_armature.data.bones:
+            bone.inherit_scale = 'NONE'
+        # apply scale to pose bones in bonescale dict
+        # TODO: derive correct coordinate directions based on target armature bone orientations
+        for posebone in target_armature.pose.bones:
+            scale_vector = bonescale_dict[posebone.name]
+            if scale_vector:
+                posebone.scale = mathutils.Vector((scale_vector['X'], scale_vector['Y'], scale_vector['Z']))
+
         return {'FINISHED'}
 
 class BustomizeReset(bpy.types.Operator):
@@ -96,12 +144,16 @@ class BustomizeReset(bpy.types.Operator):
         return {'FINISHED'}
 
 class Settings(bpy.types.PropertyGroup):
-    target_armature: bpy.props.PointerProperty(name='target', type=bpy.types.Armature) # type: ignore
+    target_armature: bpy.props.PointerProperty(name='target', type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE') # type: ignore
     cplus_hash: bpy.props.StringProperty(name='clipboard base64 str from c+') # type: ignore
+    was_applied: bpy.props.BoolProperty(default=False) # type: ignore
+
 
 def translate_hash(the_hasherrrr: str):
     bytes = base64.b64decode(the_hasherrrr)
     bytes_array = bytearray(bytes)
+
+    # TODO: this is 31 when c+ version should be 4. 'version' key in json is correct
     version = bytes_array[0]
 
     json_str = zlib.decompress(bytes_array, zlib.MAX_WBITS|16).decode('utf-8')
@@ -115,6 +167,7 @@ def get_bone_scaling(cplus_dict: dict):
     for key in bones.keys():
         new_bones[key] = bones[key]['Scaling']
     return new_bones
+
 
 def register():
     bpy.utils.register_class(Bustomize)
