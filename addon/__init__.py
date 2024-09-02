@@ -25,26 +25,7 @@ import bpy
 import base64
 import json
 import zlib
-
-class Bustomize(bpy.types.Operator):
-    bl_label = "bustomize"
-    bl_idname = "object.bustomize"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context: bpy.types.Context) -> bool:
-        if context.mode != 'OBJECT': return False
-
-        settings: Settings = context.scene.bustomize_settings
-        if not settings: return False
-        return True
-
-    def execute(self, context: bpy.types.Context):
-        settings: Settings = context.scene.bustomize_settings
-        ver, translated = translate_hash(settings.cplus_hash)
-        print(f'c+ version: {ver}')
-        print(f'c+ dict: {translated}')
-        return {'FINISHED'}
+from collections import defaultdict
 
 class BustomizePanel(bpy.types.Panel):
     bl_label = "bustomize"
@@ -70,6 +51,49 @@ class BustomizePanel(bpy.types.Panel):
 
         row = layout.row()
         row.operator("object.bustomize", text="do bustomize")
+        row = layout.row()
+        row.operator("object.bustomize", text="reset armature scale")
+
+class Bustomize(bpy.types.Operator):
+    bl_label = "bustomize"
+    bl_idname = "object.bustomize"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        if context.mode != 'OBJECT': return False
+
+        settings: Settings = context.scene.bustomize_settings
+        if not settings: return False
+        return True
+
+    def execute(self, context: bpy.types.Context):
+        settings: Settings = context.scene.bustomize_settings
+        ver, cplus_dict = translate_hash(settings.cplus_hash)
+        print(f'c+ version: {ver}')
+        bonescale_dict = get_bone_scaling(cplus_dict)
+        print(f'bonescale dict: {bonescale_dict}')
+        return {'FINISHED'}
+
+class BustomizeReset(bpy.types.Operator):
+    # STUB
+    # should overwrite all scaling in target armature to 1.1.1
+    # should reset Inherit Scale on all bones in armature to Full
+    bl_label = "bustomize"
+    bl_idname = "object.bustomize_reset"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        if context.mode != 'OBJECT': return False
+
+        settings: Settings = context.scene.bustomize_settings
+        if not settings: return False
+        return True
+
+    def execute(self, context: bpy.types.Context):
+        settings: Settings = context.scene.bustomize_settings
+        return {'FINISHED'}
 
 class Settings(bpy.types.PropertyGroup):
     target_armature: bpy.props.PointerProperty(name='target', type=bpy.types.Armature) # type: ignore
@@ -84,6 +108,13 @@ def translate_hash(the_hasherrrr: str):
     json_dict = json.loads(json_str[1:])
 
     return version, json_dict
+
+def get_bone_scaling(cplus_dict: dict):
+    bones = cplus_dict['Bones']
+    new_bones = defaultdict(dict)
+    for key in bones.keys():
+        new_bones[key] = bones[key]['Scaling']
+    return new_bones
 
 def register():
     bpy.utils.register_class(Bustomize)
