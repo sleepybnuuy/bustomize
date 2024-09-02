@@ -22,6 +22,9 @@ bl_info = {
 }
 
 import bpy
+import base64
+import json
+import zlib
 
 class Bustomize(bpy.types.Operator):
     bl_label = "bustomize"
@@ -37,11 +40,15 @@ class Bustomize(bpy.types.Operator):
         return True
 
     def execute(self, context: bpy.types.Context):
-        pass
+        settings: Settings = context.scene.bustomize_settings
+        ver, translated = translate_hash(settings.cplus_hash)
+        print(f'c+ version: {ver}')
+        print(f'c+ dict: {translated}')
+        return {'FINISHED'}
 
 class BustomizePanel(bpy.types.Panel):
     bl_label = "bustomize"
-    bl_idname = "object.bustomize.panel"
+    bl_idname = "OBJECT_PT_bustomize_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "bustomize"
@@ -51,11 +58,32 @@ class BustomizePanel(bpy.types.Panel):
         layout = self.layout
         settings = context.scene.bustomize_settings
 
-        row = layout.row(align=True)
-        row.prop(settings, "target_armature")
+        row = layout.row()
+        row.label(text='Target Armature')
+        row = row.row(align=True)
+        row.prop(settings, "target_armature", text="")
+
+        row = layout.row()
+        row.label(text='Customize+ String')
+        row = row.row(align=True)
+        row.prop(settings, "cplus_hash", text="", icon="PASTEDOWN")
+
+        row = layout.row()
+        row.operator("object.bustomize", text="do bustomize")
 
 class Settings(bpy.types.PropertyGroup):
     target_armature: bpy.props.PointerProperty(name='target', type=bpy.types.Armature) # type: ignore
+    cplus_hash: bpy.props.StringProperty(name='clipboard base64 str from c+') # type: ignore
+
+def translate_hash(the_hasherrrr: str):
+    bytes = base64.b64decode(the_hasherrrr)
+    bytes_array = bytearray(bytes)
+    version = bytes_array[0]
+
+    json_str = zlib.decompress(bytes_array, zlib.MAX_WBITS|16).decode('utf-8')
+    json_dict = json.loads(json_str[1:])
+
+    return version, json_dict
 
 def register():
     bpy.utils.register_class(Bustomize)
