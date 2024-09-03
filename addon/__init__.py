@@ -49,15 +49,17 @@ class BustomizePanel(bpy.types.Panel):
         row.label(text='Customize+ String')
         row = row.row(align=True)
         row.prop(settings, "cplus_hash", text="", icon="PASTEDOWN")
+        row.prop(settings, "flip_axes", text="", icon="CON_ROTLIKE")
 
         row = layout.row()
         row.operator("object.bustomize", text="do bustomize")
         row = layout.row()
-        row.operator("object.bustomize", text="reset armature scale")
+        row.operator("object.bustomize_reset", text="reset armature scale")
 
 class Bustomize(bpy.types.Operator):
     bl_label = "bustomize"
     bl_idname = "object.bustomize"
+    bl_description = "apply c+ scale data to targeted armature"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -66,6 +68,7 @@ class Bustomize(bpy.types.Operator):
 
         settings: Settings = context.scene.bustomize_settings
         if not settings: return False
+        if settings.was_applied: return False
         return True
 
     def execute(self, context: bpy.types.Context):
@@ -76,6 +79,9 @@ class Bustomize(bpy.types.Operator):
 
         ver, cplus_dict = translate_hash(settings.cplus_hash)
         bonescale_dict = get_bone_scaling(cplus_dict)
+
+        # validate target armature contents
+        # only apply scaling to pose bones when we can safely revert
         target_armature = settings.target_armature
         if not target_armature:
             self.report({'ERROR'}, 'Target armature DNE')
@@ -84,8 +90,6 @@ class Bustomize(bpy.types.Operator):
             self.report({'ERROR'}, 'Did not select a valid armature object')
             return {'CANCELLED'}
 
-        # validate target armature contents
-        # only apply scaling to pose bones when we can safely revert
         target_bone_names = []
         for bone in target_armature.data.bones:
             if bone.inherit_scale != "FULL":
@@ -108,27 +112,27 @@ class Bustomize(bpy.types.Operator):
             return {'CANCELLED'}
         elif len(missing_bones) > 1:
             self.report({'WARNING'}, f'Skipped missing bones: {", ".join(missing_bones)}')
-
         # end validation
 
         # unlink parent bone scaling for ALL bones
         for bone in target_armature.data.bones:
             bone.inherit_scale = 'NONE'
         # apply scale to pose bones in bonescale dict
-        # TODO: derive correct coordinate directions based on target armature bone orientations
         for posebone in target_armature.pose.bones:
             scale_vector = bonescale_dict[posebone.name]
             if scale_vector:
-                posebone.scale = mathutils.Vector((scale_vector['X'], scale_vector['Y'], scale_vector['Z']))
+                if settings.flip_axes:
+                    posebone.scale = mathutils.Vector((scale_vector['Z'], scale_vector['X'], scale_vector['Y']))
+                else:
+                    posebone.scale = mathutils.Vector((scale_vector['X'], scale_vector['Y'], scale_vector['Z']))
 
+        settings.was_applied = True
         return {'FINISHED'}
 
 class BustomizeReset(bpy.types.Operator):
-    # STUB
-    # should overwrite all scaling in target armature to 1.1.1
-    # should reset Inherit Scale on all bones in armature to Full
     bl_label = "bustomize"
     bl_idname = "object.bustomize_reset"
+    bl_description = "reset scale data"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -137,15 +141,42 @@ class BustomizeReset(bpy.types.Operator):
 
         settings: Settings = context.scene.bustomize_settings
         if not settings: return False
+        if not settings.was_applied: return False
         return True
 
     def execute(self, context: bpy.types.Context):
         settings: Settings = context.scene.bustomize_settings
+        if not settings.was_applied:
+            self.report({'ERROR'}, 'Armature has not been scaled!')
+            return {'CANCELLED'}
+
+        # validate target armature
+        target_armature = settings.target_armature
+        if not target_armature:
+            self.report({'ERROR'}, 'Target armature DNE')
+            return {'CANCELLED'}
+        if not target_armature.type == "ARMATURE":
+            self.report({'ERROR'}, 'Did not select a valid armature object')
+            return {'CANCELLED'}
+        for bone in target_armature.data.bones:
+            if bone.inherit_scale != "NONE":
+                self.report({'ERROR'}, f'Armature has not been scaled!')
+                return {'CANCELLED'}
+        # end validation
+
+        # reset scale inheritance and scale factor on all bones
+        for bone in target_armature.data.bones:
+            bone.inherit_scale = 'FULL'
+        for posebone in target_armature.pose.bones:
+            posebone.scale = mathutils.Vector((1.0, 1.0, 1.0))
+
+        settings.was_applied = False
         return {'FINISHED'}
 
 class Settings(bpy.types.PropertyGroup):
-    target_armature: bpy.props.PointerProperty(name='target', type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE') # type: ignore
-    cplus_hash: bpy.props.StringProperty(name='clipboard base64 str from c+') # type: ignore
+    target_armature: bpy.props.PointerProperty(name='target armature object', type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE') # type: ignore
+    cplus_hash: bpy.props.StringProperty(name='clipboard string from c+') # type: ignore
+    flip_axes: bpy.props.BoolProperty(default=False, name='flip bone axes (toggle if your scaling applies weird)\ntypically, you should only use this with a problematic devkit skeleton') # type: ignore
     was_applied: bpy.props.BoolProperty(default=False) # type: ignore
 
 
@@ -171,12 +202,14 @@ def get_bone_scaling(cplus_dict: dict):
 
 def register():
     bpy.utils.register_class(Bustomize)
+    bpy.utils.register_class(BustomizeReset)
     bpy.utils.register_class(BustomizePanel)
     bpy.utils.register_class(Settings)
     bpy.types.Scene.bustomize_settings = bpy.props.PointerProperty(type=Settings)
 
 def unregister():
     bpy.utils.unregister_class(Bustomize)
+    bpy.utils.unregister_class(BustomizeReset)
     bpy.utils.unregister_class(BustomizePanel)
     bpy.utils.unregister_class(Settings)
     del bpy.types.Scene.bustomize_settings
