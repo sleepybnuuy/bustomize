@@ -5,6 +5,8 @@ customize+ to blender plugin
 download the latest release .zip and install the zip in blender 4.0+ thru `Edit > Preferences > Add-ons > Install...`
 
 ### USAGE
+![GIF 9-2-2024 4-07-14 PM](https://github.com/user-attachments/assets/2a74c52a-f1ba-42c4-9d3d-47c07057ae53)
+
 select a compatible xiv-exported armature (preferably one directly from textools), then paste in a copied template string from customize+.
 
 the `do bustomize` button will apply the template's scaling to each bone available in the target armature - this is done on **pose bones**, so you won't see any effects of this when in Edit Mode.
