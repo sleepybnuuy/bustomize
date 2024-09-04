@@ -1,5 +1,7 @@
 # bustomize
-customize+ to blender plugin
+customize+ to blender add-on
+
+see: https://github.com/Aether-Tools/CustomizePlus
 
 ### INSTALLATION
 download the latest release .zip and install the zip in blender 4.0+ thru `Edit > Preferences > Add-ons > Install...`
@@ -19,6 +21,6 @@ caveats:
 - this add-on does **not** take into account racial scaling from xiv pbds -- the scaling will be applied consistently without regard for the target armature's race/gender. results necessarily won't be true-to-game, but they are close enough
 
 ### NOTES
-this project is not maintained or endorsed by the developers of customize+ -- please visit their repo here: https://github.com/Aether-Tools/CustomizePlus
+this project is not maintained or endorsed by the developers of customize+ -- it also depends entirely on them and their architecture, so please give them some love
 
 add-on made with blender_vscode by jacques lucke: https://github.com/JacquesLucke/blender_vscode
