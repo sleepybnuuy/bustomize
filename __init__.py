@@ -78,7 +78,10 @@ class Bustomize(bpy.types.Operator):
             return {'CANCELLED'}
 
         ver, cplus_dict = translate_hash(settings.cplus_hash)
-        bonescale_dict = get_bone_scaling(cplus_dict)
+        print(f'ver: {ver}')
+        scale_dict = get_bone_values(cplus_dict, 'Scaling')
+        rot_dict = get_bone_values(cplus_dict, 'Rotation')
+        pos_dict = get_bone_values(cplus_dict, 'Translation')
 
         # validate target armature contents
         # only apply scaling to pose bones when we can safely revert
@@ -104,10 +107,10 @@ class Bustomize(bpy.types.Operator):
         #         return {'CANCELLED'}
 
         missing_bones = []
-        for bonescale_name in bonescale_dict.keys():
+        for bonescale_name in scale_dict.keys():
             if bonescale_name not in target_bone_names:
                 missing_bones.append(bonescale_name)
-        if len(missing_bones) == len(bonescale_dict.keys()):
+        if len(missing_bones) == len(scale_dict.keys()):
             self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
             return {'CANCELLED'}
         elif len(missing_bones) > 1:
@@ -119,7 +122,7 @@ class Bustomize(bpy.types.Operator):
             bone.inherit_scale = 'NONE'
         # apply scale to pose bones in bonescale dict
         for posebone in target_armature.pose.bones:
-            scale_vector = bonescale_dict[posebone.name]
+            scale_vector = scale_dict[posebone.name]
             if scale_vector:
                 if settings.flip_axes:
                     posebone.scale = mathutils.Vector((scale_vector['Z'], scale_vector['X'], scale_vector['Y']))
@@ -185,18 +188,20 @@ def translate_hash(the_hasherrrr: str):
     bytes_array = bytearray(bytes)
 
     # TODO: this is 31 when c+ version should be 4. 'version' key in json is correct
-    version = bytes_array[0]
+    version_byte = bytes_array[0]
 
     json_str = zlib.decompress(bytes_array, zlib.MAX_WBITS|16).decode('utf-8')
     json_dict = json.loads(json_str[1:])
 
+    version = json_dict['Version']
+
     return version, json_dict
 
-def get_bone_scaling(cplus_dict: dict):
+def get_bone_values(cplus_dict: dict, value_key: str):
     bones = cplus_dict['Bones']
     new_bones = defaultdict(dict)
     for key in bones.keys():
-        new_bones[key] = bones[key]['Scaling']
+        new_bones[key] = bones[key][value_key]
     return new_bones
 
 
