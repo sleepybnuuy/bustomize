@@ -54,7 +54,11 @@ class BustomizePanel(bpy.types.Panel):
         row = layout.row()
         row.operator("object.bustomize", text="do bustomize")
         row = layout.row()
-        row.operator("object.bustomize_reset", text="reset armature scale")
+        row.operator("object.bustomize_pos", text="do bustomize (pos)")
+        row = layout.row()
+        row.operator("object.bustomize_rot", text="do bustomize (rot)")
+        row = layout.row()
+        row.operator("object.bustomize_reset", text="reset armature")
 
 class Bustomize(bpy.types.Operator):
     bl_label = "bustomize"
@@ -132,10 +136,58 @@ class Bustomize(bpy.types.Operator):
         settings.was_applied = True
         return {'FINISHED'}
 
+'''
+approach:
+1. any pos modified bones should each have a DUPE_ bone created in the armature to which its original children are now parented
+2. if necessary(?), toggle bone.use_local_location to apply position data correctly
+3. translate original posebone with c+ values (pos_dict)
+'''
+class BustomizePos(bpy.types.Operator):
+    bl_label = "bustomize_pos"
+    bl_idname = "object.bustomize_pos"
+    bl_description = "apply c+ positional data to targeted armature"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        if context.mode != 'OBJECT': return False
+
+        settings: Settings = context.scene.bustomize_settings
+        if not settings: return False
+        # if settings.was_applied: return False
+        return True
+
+    def execute(self, context: bpy.types.Context):
+        return {'FINISHED'}
+
+'''
+approach:
+1. unlink parent bone rotation inheritance from ALL armature bones (bone.use_inherit_rotation)
+2. apply c+ rot values (rot_dict) to any affected posebones
+2a. change posebone rotation mode to xyz euler? if not, have to convert euler angles to quat for assignment
+'''
+class BustomizeRot(bpy.types.Operator):
+    bl_label = "bustomize_rot"
+    bl_idname = "object.bustomize_rot"
+    bl_description = "apply c+ rotational data to targeted armature"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        if context.mode != 'OBJECT': return False
+
+        settings: Settings = context.scene.bustomize_settings
+        if not settings: return False
+        # if settings.was_applied: return False
+        return True
+
+    def execute(self, context: bpy.types.Context):
+        return {'FINISHED'}
+
 class BustomizeReset(bpy.types.Operator):
     bl_label = "bustomize"
     bl_idname = "object.bustomize_reset"
-    bl_description = "reset scale data"
+    bl_description = "reset bustomized data"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -167,10 +219,20 @@ class BustomizeReset(bpy.types.Operator):
                 return {'CANCELLED'}
         # end validation
 
-        # reset scale inheritance and scale factor on all bones
+        # reset bones' scale, rotation inheritance; local vs global pos bool
         for bone in target_armature.data.bones:
             bone.inherit_scale = 'FULL'
+            bone.use_inherit_rotation = True
+            bone.use_local_location = True
+
+            # clean any generated bones
+            if bone.name.startswith('DUPE_'):
+                dedupe(bone)
+
+        # reset posebone pose/rot/scale data
         for posebone in target_armature.pose.bones:
+            posebone.location = mathutils.Vector((0.0, 0.0, 0.0))
+            posebone.rotation_quaternion = mathutils.Quaternion((1.0, 0.0, 0.0, 0.0))
             posebone.scale = mathutils.Vector((1.0, 1.0, 1.0))
 
         settings.was_applied = False
@@ -204,9 +266,17 @@ def get_bone_values(cplus_dict: dict, value_key: str):
         new_bones[key] = bones[key][value_key]
     return new_bones
 
+def dedupe(bone):
+    pass
+
+def dupe(bone):
+    pass
+
 
 def register():
     bpy.utils.register_class(Bustomize)
+    bpy.utils.register_class(BustomizePos)
+    bpy.utils.register_class(BustomizeRot)
     bpy.utils.register_class(BustomizeReset)
     bpy.utils.register_class(BustomizePanel)
     bpy.utils.register_class(Settings)
@@ -214,6 +284,8 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(Bustomize)
+    bpy.utils.unregister_class(BustomizePos)
+    bpy.utils.unregister_class(BustomizeRot)
     bpy.utils.unregister_class(BustomizeReset)
     bpy.utils.unregister_class(BustomizePanel)
     bpy.utils.unregister_class(Settings)
