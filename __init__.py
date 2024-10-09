@@ -220,9 +220,10 @@ def get_bone_values(cplus_dict: dict, value_key: str):
 
 def is_valid(self, context, ver, tuple):
     settings: Settings = context.scene.bustomize_settings
-    if settings.was_applied:
-        self.report({'ERROR'}, 'C+ scaling was already applied! Reset then try again')
-        return False
+    # TODO: reinstate once scale, pos, and rot are all in one validation
+    # if settings.was_applied:
+    #     self.report({'ERROR'}, 'C+ scaling was already applied! Reset then try again')
+    #     return False
 
     # validate target armature contents
     # only apply scaling to pose bones when we can safely revert
