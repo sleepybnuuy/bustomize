@@ -77,49 +77,15 @@ class Bustomize(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         settings: Settings = context.scene.bustomize_settings
-        if settings.was_applied:
-            self.report({'ERROR'}, 'C+ scaling was already applied! Reset then try again')
-            return {'CANCELLED'}
-
-        ver, cplus_dict = translate_hash(settings.cplus_hash)
-        print(f'ver: {ver}')
+        version, cplus_dict = translate_hash(settings.cplus_hash)
         scale_dict = get_bone_values(cplus_dict, 'Scaling')
         rot_dict = get_bone_values(cplus_dict, 'Rotation')
         pos_dict = get_bone_values(cplus_dict, 'Translation')
 
-        # validate target armature contents
-        # only apply scaling to pose bones when we can safely revert
+        if not is_valid(self, context, version, (scale_dict, rot_dict, pos_dict)):
+            return {'CANCELLED'}
+
         target_armature = settings.target_armature
-        if not target_armature:
-            self.report({'ERROR'}, 'Target armature DNE')
-            return {'CANCELLED'}
-        if not target_armature.type == "ARMATURE":
-            self.report({'ERROR'}, 'Did not select a valid armature object')
-            return {'CANCELLED'}
-
-        target_bone_names = []
-        for bone in target_armature.data.bones:
-            if bone.inherit_scale != "FULL":
-                self.report({'ERROR'}, f'Armature contains bone {bone.name} which does not inherit parent bone scaling')
-                return {'CANCELLED'}
-            target_bone_names.append(bone.name)
-
-        # TODO: Armature contains bone j_asi_b_l with unexpected scale: <Vector (1.0000, 1.0000, 1.0000)>
-        # for posebone in target_armature.pose.bones:
-        #     if posebone.scale != mathutils.Vector((1.0, 1.0, 1.0)):
-        #         self.report({'ERROR'}, f'Armature contains bone {posebone.name} with unexpected scale: {posebone.scale}')
-        #         return {'CANCELLED'}
-
-        missing_bones = []
-        for bonescale_name in scale_dict.keys():
-            if bonescale_name not in target_bone_names:
-                missing_bones.append(bonescale_name)
-        if len(missing_bones) == len(scale_dict.keys()):
-            self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
-            return {'CANCELLED'}
-        elif len(missing_bones) > 1:
-            self.report({'WARNING'}, f'Skipped missing bones: {", ".join(missing_bones)}')
-        # end validation
 
         # unlink parent bone scaling for ALL bones
         for bone in target_armature.data.bones:
@@ -201,24 +167,10 @@ class BustomizeReset(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         settings: Settings = context.scene.bustomize_settings
-        if not settings.was_applied:
-            self.report({'ERROR'}, 'Armature has not been scaled!')
+        if not is_valid_reset(self, context):
             return {'CANCELLED'}
 
-        # validate target armature
         target_armature = settings.target_armature
-        if not target_armature:
-            self.report({'ERROR'}, 'Target armature DNE')
-            return {'CANCELLED'}
-        if not target_armature.type == "ARMATURE":
-            self.report({'ERROR'}, 'Did not select a valid armature object')
-            return {'CANCELLED'}
-        for bone in target_armature.data.bones:
-            if bone.inherit_scale != "NONE":
-                self.report({'ERROR'}, f'Armature has not been scaled!')
-                return {'CANCELLED'}
-        # end validation
-
         # reset bones' scale, rotation inheritance; local vs global pos bool
         for bone in target_armature.data.bones:
             bone.inherit_scale = 'FULL'
@@ -265,6 +217,68 @@ def get_bone_values(cplus_dict: dict, value_key: str):
     for key in bones.keys():
         new_bones[key] = bones[key][value_key]
     return new_bones
+
+def is_valid(self, context, ver, tuple):
+    settings: Settings = context.scene.bustomize_settings
+    if settings.was_applied:
+        self.report({'ERROR'}, 'C+ scaling was already applied! Reset then try again')
+        return False
+
+    # validate target armature contents
+    # only apply scaling to pose bones when we can safely revert
+    target_armature = settings.target_armature
+    if not target_armature:
+        self.report({'ERROR'}, 'Target armature DNE')
+        return False
+    if not target_armature.type == "ARMATURE":
+        self.report({'ERROR'}, 'Did not select a valid armature object')
+        return False
+
+    target_bone_names = []
+    for bone in target_armature.data.bones:
+        if bone.inherit_scale != "FULL":
+            self.report({'ERROR'}, f'Armature contains bone {bone.name} which does not inherit parent bone scaling')
+            return False
+        target_bone_names.append(bone.name)
+
+    # TODO: Armature contains bone j_asi_b_l with unexpected scale: <Vector (1.0000, 1.0000, 1.0000)>
+    # for posebone in target_armature.pose.bones:
+    #     if posebone.scale != mathutils.Vector((1.0, 1.0, 1.0)):
+    #         self.report({'ERROR'}, f'Armature contains bone {posebone.name} with unexpected scale: {posebone.scale}')
+    #         return False
+
+    scale = tuple[0]
+    missing_bones = []
+    for bonescale_name in scale.keys():
+        if bonescale_name not in target_bone_names:
+            missing_bones.append(bonescale_name)
+    if len(missing_bones) == len(scale.keys()):
+        self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
+        return False
+    elif len(missing_bones) > 1:
+        self.report({'WARNING'}, f'Skipped missing bones: {", ".join(missing_bones)}')
+
+    return True
+
+def is_valid_reset(self, context):
+    settings: Settings = context.scene.bustomize_settings
+    if not settings.was_applied:
+        self.report({'ERROR'}, 'Armature has not been scaled!')
+        return False
+
+    # validate target armature
+    target_armature = settings.target_armature
+    if not target_armature:
+        self.report({'ERROR'}, 'Target armature DNE')
+        return False
+    if not target_armature.type == "ARMATURE":
+        self.report({'ERROR'}, 'Did not select a valid armature object')
+        return False
+    for bone in target_armature.data.bones:
+        if bone.inherit_scale != "NONE":
+            self.report({'ERROR'}, f'Armature has not been scaled!')
+            return False
+    return True
 
 def dedupe(bone):
     pass
