@@ -72,7 +72,7 @@ class Bustomize(bpy.types.Operator):
 
         settings: Settings = context.scene.bustomize_settings
         if not settings: return False
-        if settings.was_applied: return False
+        # if settings.was_applied: return False
         return True
 
     def execute(self, context: bpy.types.Context):
@@ -195,7 +195,7 @@ class BustomizeReset(bpy.types.Operator):
 
         settings: Settings = context.scene.bustomize_settings
         if not settings: return False
-        if not settings.was_applied: return False
+        # if not settings.was_applied: return False
         return True
 
     def execute(self, context: bpy.types.Context):
@@ -296,9 +296,9 @@ def is_valid(self, context, ver, tuple):
 
 def is_valid_reset(self, context):
     settings: Settings = context.scene.bustomize_settings
-    if not settings.was_applied:
-        self.report({'ERROR'}, 'Armature has not been scaled!')
-        return False
+    # if not settings.was_applied:
+    #     self.report({'ERROR'}, 'Armature has not been scaled!')
+    #     return False
 
     # validate target armature
     target_armature = settings.target_armature
