@@ -124,6 +124,23 @@ class BustomizePos(bpy.types.Operator):
         return True
 
     def execute(self, context: bpy.types.Context):
+        settings: Settings = context.scene.bustomize_settings
+        version, cplus_dict = translate_hash(settings.cplus_hash)
+        pos_dict = get_bone_values(cplus_dict, 'Translation')
+        target_armature = settings.target_armature
+
+        # create and parent DUPE_ bones
+        for bone in target_armature.data.bones:
+            should_translate = pos_dict[bone.name]
+            if should_translate:
+                dupe(bone)
+
+        # translate posebones
+        for posebone in target_armature.pose.bones:
+            translation = pos_dict[bone.name]
+            if translation:
+                posebone.location = mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
+
         return {'FINISHED'}
 
 '''
@@ -285,7 +302,12 @@ def dedupe(bone):
     pass
 
 def dupe(bone):
-    pass
+    dupe_bone = bone.copy()
+    dupe_bone.name = f'DUPE_{dupe_bone.name}'
+    bpy.data.scenes[0].objects.link(dupe_bone)
+    for child in bone.children:
+        child.parent = dupe_bone
+    return dupe_bone
 
 
 def register():
