@@ -250,7 +250,14 @@ def get_bone_values(cplus_dict: dict, value_key: str):
     bones = cplus_dict['Bones']
     new_bones = defaultdict(dict)
     for key in bones.keys():
-        new_bones[key] = bones[key][value_key]
+        values = bones[key][value_key]
+
+        # skip pos/rot entries for bones if their x y and z are all 0.0
+        if value_key in ['Translation', 'Rotation']:
+            if values['X'] == values['Y'] == values['Z'] == 0.0:
+                continue
+
+        new_bones[key] = values
     return new_bones
 
 def is_valid(self, context, ver, tuple):
