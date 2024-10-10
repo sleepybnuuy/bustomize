@@ -16,7 +16,7 @@ bl_info = {
     "author" : "sleepybnuuy",
     "description" : "customize+ to blender add-on",
     "blender" : (4, 0, 0),
-    "version" : (1, 0, 0),
+    "version" : (1, 0, 1),
     "location" : "View3D > Sidebar > bustomize Tab",
     "category" : "Rigging"
 }
