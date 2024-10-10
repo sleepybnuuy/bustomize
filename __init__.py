@@ -322,7 +322,8 @@ def dedupe(armature, dupe_bone):
 
     # temp enter edit mode to nuke dupe bone
     bpy.ops.object.editmode_toggle()
-    armature.data.edit_bones.remove(dupe_bone)
+    dupe_edit_bone = armature.data.edit_bones[dupe_bone.name]
+    armature.data.edit_bones.remove(dupe_edit_bone)
     bpy.ops.object.editmode_toggle()
 
     return bone
