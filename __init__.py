@@ -129,6 +129,7 @@ class BustomizePos(bpy.types.Operator):
         pos_dict = get_bone_values(cplus_dict, 'Translation')
         target_armature = settings.target_armature
 
+        print(pos_dict) #TODO: remove
         # create and parent DUPE_ bones
         for bone in target_armature.data.bones:
             should_translate = pos_dict[bone.name]
@@ -170,6 +171,7 @@ class BustomizeRot(bpy.types.Operator):
         rot_dict = get_bone_values(cplus_dict, 'Rotation')
         target_armature = settings.target_armature
 
+        print(rot_dict) #TODO: remove
         # disable rotation inheritance from ALL bones
         for bone in target_armature.data.bones:
             bone.use_inherit_rotation = False
@@ -315,34 +317,36 @@ def is_valid_reset(self, context):
     return True
 
 def dedupe(armature, dupe_bone):
-    # parent bones back to original to cleanup armature
-    bone = armature.data.bones[dupe_bone.name[5:]]
-    for child in dupe_bone.children:
-        child.parent = bone
-
     # temp enter edit mode to nuke dupe bone
     bpy.ops.object.editmode_toggle()
-    dupe_edit_bone = armature.data.edit_bones[dupe_bone.name]
-    armature.data.edit_bones.remove(dupe_edit_bone)
-    bpy.ops.object.editmode_toggle()
 
-    return bone
+    # parent bones back to original to cleanup armature
+    dupe_edit_bone = armature.data.edit_bones[dupe_bone.name]
+    edit_bone = armature.data.edit_bones[dupe_bone.name[5:]]
+    for child in dupe_bone.children:
+        child.parent = edit_bone
+
+    armature.data.edit_bones.remove(dupe_edit_bone)
+
+    bpy.ops.object.editmode_toggle()
+    return
 
 def dupe(armature, bone):
     # temp enter edit mode to create dupe bone
     bpy.ops.object.editmode_toggle()
+
     edit_bone = armature.data.edit_bones[bone.name]
     dupe_edit_bone = armature.data.edit_bones.new(f'DUPE_{bone.name}')
     dupe_edit_bone.matrix = edit_bone.matrix.copy()
     dupe_edit_bone.length = edit_bone.length
-    bpy.ops.object.editmode_toggle()
+    dupe_edit_bone.parent = edit_bone.parent
 
     # parent bones to new dupe to prevent inheriting translation edit
-    dupe_bone = armature.data.bones[f'DUPE_{bone.name}']
-    for child in bone.children:
-        child.parent = dupe_bone
+    for child in edit_bone.children:
+        child.parent = dupe_edit_bone
 
-    return dupe_bone
+    bpy.ops.object.editmode_toggle()
+    return
 
 
 def register():
