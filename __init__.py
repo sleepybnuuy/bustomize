@@ -137,7 +137,7 @@ class BustomizePos(bpy.types.Operator):
 
         # translate posebones
         for posebone in target_armature.pose.bones:
-            translation = pos_dict[bone.name]
+            translation = pos_dict[posebone.name]
             if translation:
                 posebone.location = mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
 
@@ -165,6 +165,22 @@ class BustomizeRot(bpy.types.Operator):
         return True
 
     def execute(self, context: bpy.types.Context):
+        settings: Settings = context.scene.bustomize_settings
+        version, cplus_dict = translate_hash(settings.cplus_hash)
+        rot_dict = get_bone_values(cplus_dict, 'Rotation')
+        target_armature = settings.target_armature
+
+        # disable rotation inheritance from ALL bones
+        for bone in target_armature.data.bones:
+            bone.use_inherit_rotation = False
+
+        # apply euler rotations as quat to posebones
+        for posebone in target_armature.pose.bones:
+            rotation = rot_dict[posebone.name]
+            if rotation:
+                euler_rot = mathutils.Euler((rotation['X'], rotation['Y'], rotation['Z']), 'XYZ')
+                posebone.rotation_quaternion = euler_rot.to_quaternion()
+
         return {'FINISHED'}
 
 class BustomizeReset(bpy.types.Operator):
