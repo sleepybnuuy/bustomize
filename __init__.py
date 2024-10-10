@@ -212,7 +212,7 @@ class BustomizeReset(bpy.types.Operator):
 
             # clean any generated bones
             if bone.name.startswith('DUPE_'):
-                dedupe(bone)
+                dedupe(target_armature, bone)
 
         # reset posebone pose/rot/scale data
         for posebone in target_armature.pose.bones:
@@ -314,16 +314,18 @@ def is_valid_reset(self, context):
             return False
     return True
 
-def dedupe(bone):
+# TODO: unstub these! have to use editbones in edit mode
+def dedupe(armature, dupe_bone):
     pass
 
 def dupe(bone):
-    dupe_bone = bone.copy()
-    dupe_bone.name = f'DUPE_{dupe_bone.name}'
-    bpy.data.scenes[0].objects.link(dupe_bone)
-    for child in bone.children:
-        child.parent = dupe_bone
-    return dupe_bone
+    # dupe_bone = bone.copy()
+    # dupe_bone.name = f'DUPE_{dupe_bone.name}'
+    # bpy.data.scenes[0].objects.link(dupe_bone)
+    # for child in bone.children:
+    #     child.parent = dupe_bone
+    # return dupe_bone
+    pass
 
 
 def register():
