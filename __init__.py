@@ -88,10 +88,9 @@ class Bustomize(bpy.types.Operator):
         target_armature = settings.target_armature
 
         # unlink parent bone scaling for ALL bones
-        for bone in target_armature.data.bones:
-            bone.inherit_scale = 'NONE'
         # apply scale to pose bones in bonescale dict
         for posebone in target_armature.pose.bones:
+            posebone.bone.inherit_scale = 'NONE'
             scale_vector = scale_dict[posebone.name]
             if scale_vector:
                 if settings.flip_axes:
@@ -129,17 +128,16 @@ class BustomizePos(bpy.types.Operator):
         pos_dict = get_bone_values(cplus_dict, 'Translation')
         target_armature = settings.target_armature
 
-        print(pos_dict) #TODO: remove
         # create and parent DUPE_ bones
-        for bone in target_armature.data.bones:
-            should_translate = pos_dict[bone.name]
-            if should_translate:
-                dupe(target_armature, bone)
-
+        for posebone in target_armature.pose.bones:
+            translation = pos_dict[posebone.name]
+            if translation:
+                dupe(target_armature, posebone.bone)
         # translate posebones
         for posebone in target_armature.pose.bones:
             translation = pos_dict[posebone.name]
             if translation:
+                # dupe(target_armature, posebone.bone)
                 posebone.location += mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
 
         return {'FINISHED'}
@@ -173,11 +171,9 @@ class BustomizeRot(bpy.types.Operator):
 
         print(rot_dict) #TODO: remove
         # disable rotation inheritance from ALL bones
-        for bone in target_armature.data.bones:
-            bone.use_inherit_rotation = False
-
         # apply euler rotations as quat to posebones
         for posebone in target_armature.pose.bones:
+            posebone.bone.use_inherit_rotation = False
             rotation = rot_dict[posebone.name]
             if rotation:
                 euler_rot = mathutils.Euler((rotation['X'], rotation['Y'], rotation['Z']), 'XYZ')
@@ -206,18 +202,17 @@ class BustomizeReset(bpy.types.Operator):
             return {'CANCELLED'}
 
         target_armature = settings.target_armature
-        # reset bones' scale, rotation inheritance; local vs global pos bool
-        for bone in target_armature.data.bones:
-            bone.inherit_scale = 'FULL'
-            bone.use_inherit_rotation = True
-            bone.use_local_location = True
-
+        for posebone in target_armature.pose.bones:
             # clean any generated bones
-            if bone.name.startswith('DUPE_'):
-                dedupe(target_armature, bone)
+            if posebone.name.startswith('DUPE_'):
+                dedupe(target_armature, posebone.bone)
 
+        # reset bones' scale, rotation inheritance; local vs global pos bool
         # reset posebone pose/rot/scale data
         for posebone in target_armature.pose.bones:
+            posebone.bone.inherit_scale = 'FULL'
+            posebone.bone.use_inherit_rotation = True
+            posebone.bone.use_local_location = True
             posebone.location = mathutils.Vector((0.0, 0.0, 0.0))
             posebone.rotation_quaternion = mathutils.Quaternion((1.0, 0.0, 0.0, 0.0))
             posebone.scale = mathutils.Vector((1.0, 1.0, 1.0))
@@ -330,7 +325,7 @@ def dedupe(armature, dupe_bone):
     # parent bones back to original to cleanup armature
     dupe_edit_bone = armature.data.edit_bones[dupe_bone.name]
     edit_bone = armature.data.edit_bones[dupe_bone.name[5:]]
-    for child in dupe_bone.children:
+    for child in dupe_edit_bone.children:
         child.parent = edit_bone
 
     armature.data.edit_bones.remove(dupe_edit_bone)
