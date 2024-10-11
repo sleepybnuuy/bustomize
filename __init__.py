@@ -25,6 +25,7 @@ import bpy
 import base64
 import json
 import zlib
+import math
 import mathutils
 from collections import defaultdict
 
@@ -54,9 +55,7 @@ class BustomizePanel(bpy.types.Panel):
         row = layout.row()
         row.operator("object.bustomize", text="do bustomize")
         row = layout.row()
-        row.operator("object.bustomize_pos", text="do bustomize (pos)")
-        row = layout.row()
-        row.operator("object.bustomize_rot", text="do bustomize (rot)")
+        row.operator("object.bustomize_rotpos", text="do bustomize (rotpos)")
         row = layout.row()
         row.operator("object.bustomize_reset", text="reset armature")
 
@@ -103,14 +102,14 @@ class Bustomize(bpy.types.Operator):
 
 '''
 approach:
-1. any pos modified bones should each have a DUPE_ bone created in the armature to which its original children are now parented
-2. if necessary(?), toggle bone.use_local_location to apply position data correctly
-3. translate original posebone with c+ values (pos_dict)
+1. any rot/pos modified bones should each have a DUPE_ bone created in the armature to which its original children are now parented
+2. translate original posebone with c+ values (pos_dict)
+3. disable rotation inheritance (use_inherit_rotation) and rotate original posebone with c+ values (rot_dict)
 '''
-class BustomizePos(bpy.types.Operator):
-    bl_label = "bustomize_pos"
-    bl_idname = "object.bustomize_pos"
-    bl_description = "apply c+ positional data to targeted armature"
+class BustomizeRotPos(bpy.types.Operator):
+    bl_label = "bustomize_rotpos"
+    bl_idname = "object.bustomize_rotpos"
+    bl_description = "apply c+ rotation+location data to targeted armature"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -126,58 +125,35 @@ class BustomizePos(bpy.types.Operator):
         settings: Settings = context.scene.bustomize_settings
         version, cplus_dict = translate_hash(settings.cplus_hash)
         pos_dict = get_bone_values(cplus_dict, 'Translation')
+        rot_dict = get_bone_values(cplus_dict, 'Rotation')
         target_armature = settings.target_armature
 
         # create and parent DUPE_ bones
         for posebone in target_armature.pose.bones:
             translation = pos_dict[posebone.name]
-            if translation:
+            rotation = rot_dict[posebone.name]
+            if translation or rotation:
                 dupe(target_armature, posebone.bone)
-        # translate posebones
+
+        # translate+rotate posebones
         for posebone in target_armature.pose.bones:
+            # disable rotation inheritance from ALL bones
+            posebone.bone.use_inherit_rotation = False
+
             translation = pos_dict[posebone.name]
+            rotation = rot_dict[posebone.name]
             if translation:
-                # dupe(target_armature, posebone.bone)
                 posebone.location += mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
 
-        return {'FINISHED'}
-
-'''
-approach:
-1. unlink parent bone rotation inheritance from ALL armature bones (bone.use_inherit_rotation)
-2. apply c+ rot values (rot_dict) to any affected posebones
-2a. change posebone rotation mode to xyz euler? if not, have to convert euler angles to quat for assignment
-'''
-class BustomizeRot(bpy.types.Operator):
-    bl_label = "bustomize_rot"
-    bl_idname = "object.bustomize_rot"
-    bl_description = "apply c+ rotational data to targeted armature"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context: bpy.types.Context) -> bool:
-        if context.mode != 'OBJECT': return False
-
-        settings: Settings = context.scene.bustomize_settings
-        if not settings: return False
-        # if settings.was_applied: return False
-        return True
-
-    def execute(self, context: bpy.types.Context):
-        settings: Settings = context.scene.bustomize_settings
-        version, cplus_dict = translate_hash(settings.cplus_hash)
-        rot_dict = get_bone_values(cplus_dict, 'Rotation')
-        target_armature = settings.target_armature
-
-        print(rot_dict) #TODO: remove
-        # disable rotation inheritance from ALL bones
-        # apply euler rotations as quat to posebones
-        for posebone in target_armature.pose.bones:
-            posebone.bone.use_inherit_rotation = False
-            rotation = rot_dict[posebone.name]
+            # apply euler rotations as quat to posebones
             if rotation:
-                euler_rot = mathutils.Euler((rotation['X'], rotation['Y'], rotation['Z']), 'XYZ')
-                posebone.rotation_quaternion += euler_rot.to_quaternion()
+                rot_radians = mathutils.Vector((
+                    math.radians(rotation['X']),
+                    math.radians(rotation['Y']),
+                    math.radians(rotation['Z'])
+                ))
+                euler_rot = mathutils.Euler(rot_radians, 'XYZ')
+                posebone.rotation_quaternion.rotate(euler_rot)
 
         return {'FINISHED'}
 
@@ -353,8 +329,7 @@ def dupe(armature, bone):
 
 def register():
     bpy.utils.register_class(Bustomize)
-    bpy.utils.register_class(BustomizePos)
-    bpy.utils.register_class(BustomizeRot)
+    bpy.utils.register_class(BustomizeRotPos)
     bpy.utils.register_class(BustomizeReset)
     bpy.utils.register_class(BustomizePanel)
     bpy.utils.register_class(Settings)
@@ -362,8 +337,7 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(Bustomize)
-    bpy.utils.unregister_class(BustomizePos)
-    bpy.utils.unregister_class(BustomizeRot)
+    bpy.utils.unregister_class(BustomizeRotPos)
     bpy.utils.unregister_class(BustomizeReset)
     bpy.utils.unregister_class(BustomizePanel)
     bpy.utils.unregister_class(Settings)
