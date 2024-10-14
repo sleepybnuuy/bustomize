@@ -53,9 +53,9 @@ class BustomizePanel(bpy.types.Panel):
         row.prop(settings, "flip_axes", text="", icon="CON_ROTLIKE")
 
         row = layout.row()
-        row.operator("object.bustomize", text="do bustomize")
+        row.operator("object.bustomize", text="do bustomize (scale)")
         row = layout.row()
-        row.operator("object.bustomize_rotpos", text="do bustomize (rotpos)")
+        row.operator("object.bustomize_rotpos", text="do bustomize (rot, pos)")
         row = layout.row()
         row.operator("object.bustomize_reset", text="reset armature")
 
@@ -71,7 +71,7 @@ class Bustomize(bpy.types.Operator):
 
         settings: Settings = context.scene.bustomize_settings
         if not settings: return False
-        # if settings.was_applied: return False
+        if settings.scale_was_applied: return False
         return True
 
     def execute(self, context: bpy.types.Context):
@@ -97,7 +97,7 @@ class Bustomize(bpy.types.Operator):
                 else:
                     posebone.scale = mathutils.Vector((scale_vector['X'], scale_vector['Y'], scale_vector['Z']))
 
-        settings.was_applied = True
+        settings.scale_was_applied = True
         return {'FINISHED'}
 
 '''
@@ -109,7 +109,7 @@ approach:
 class BustomizeRotPos(bpy.types.Operator):
     bl_label = "bustomize_rotpos"
     bl_idname = "object.bustomize_rotpos"
-    bl_description = "apply c+ rotation+location data to targeted armature"
+    bl_description = "(experimental) apply c+ rotation+location data to targeted armature"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -118,7 +118,7 @@ class BustomizeRotPos(bpy.types.Operator):
 
         settings: Settings = context.scene.bustomize_settings
         if not settings: return False
-        # if settings.was_applied: return False
+        if settings.rotpos_was_applied: return False
         return True
 
     def execute(self, context: bpy.types.Context):
@@ -143,18 +143,29 @@ class BustomizeRotPos(bpy.types.Operator):
             translation = pos_dict[posebone.name]
             rotation = rot_dict[posebone.name]
             if translation:
-                posebone.location += mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
+                if settings.flip_axes:
+                    posebone.location += mathutils.Vector((translation['Z'], translation['X'], translation['Y']))
+                else:
+                    posebone.location += mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
 
             # apply euler rotations as quat to posebones
             if rotation:
-                rot_radians = mathutils.Vector((
-                    math.radians(rotation['X']),
-                    math.radians(rotation['Y']),
-                    math.radians(rotation['Z'])
-                ))
+                if settings.flip_axes:
+                    rot_radians = mathutils.Vector((
+                        math.radians(rotation['Z']),
+                        math.radians(rotation['X']),
+                        math.radians(rotation['Y'])
+                    ))
+                else:
+                    rot_radians = mathutils.Vector((
+                        math.radians(rotation['X']),
+                        math.radians(rotation['Y']),
+                        math.radians(rotation['Z'])
+                    ))
                 euler_rot = mathutils.Euler(rot_radians, 'XYZ')
                 posebone.rotation_quaternion.rotate(euler_rot)
 
+        settings.rotpos_was_applied = True
         return {'FINISHED'}
 
 class BustomizeReset(bpy.types.Operator):
@@ -169,7 +180,7 @@ class BustomizeReset(bpy.types.Operator):
 
         settings: Settings = context.scene.bustomize_settings
         if not settings: return False
-        # if not settings.was_applied: return False
+        if not settings.scale_was_applied and not settings.rotpos_was_applied: return False
         return True
 
     def execute(self, context: bpy.types.Context):
@@ -193,14 +204,16 @@ class BustomizeReset(bpy.types.Operator):
             posebone.rotation_quaternion = mathutils.Quaternion((1.0, 0.0, 0.0, 0.0))
             posebone.scale = mathutils.Vector((1.0, 1.0, 1.0))
 
-        settings.was_applied = False
+        settings.scale_was_applied = False
+        settings.rotpos_was_applied = False
         return {'FINISHED'}
 
 class Settings(bpy.types.PropertyGroup):
     target_armature: bpy.props.PointerProperty(name='target armature object', type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE') # type: ignore
     cplus_hash: bpy.props.StringProperty(name='clipboard string from c+') # type: ignore
     flip_axes: bpy.props.BoolProperty(default=False, name='flip bone axes (toggle if your scaling applies weird)\ntypically, you should only use this with a problematic devkit skeleton') # type: ignore
-    was_applied: bpy.props.BoolProperty(default=False) # type: ignore
+    scale_was_applied: bpy.props.BoolProperty(default=False) # type: ignore
+    rotpos_was_applied: bpy.props.BoolProperty(default=False) # type: ignore
 
 
 def translate_hash(the_hasherrrr: str):
@@ -231,12 +244,15 @@ def get_bone_values(cplus_dict: dict, value_key: str):
         new_bones[key] = values
     return new_bones
 
+'''
+tuple = scale[0], rot[1], pos[2]
+'''
 def is_valid(self, context, ver, tuple):
+    if ver != 4:
+        self.report({'ERROR'}, 'C+ string version {ver} incompatible; bustomize expects 4')
+        return False
+
     settings: Settings = context.scene.bustomize_settings
-    # TODO: reinstate once scale, pos, and rot are all in one validation
-    # if settings.was_applied:
-    #     self.report({'ERROR'}, 'C+ scaling was already applied! Reset then try again')
-    #     return False
 
     # validate target armature contents
     # only apply scaling to pose bones when we can safely revert
@@ -248,6 +264,7 @@ def is_valid(self, context, ver, tuple):
         self.report({'ERROR'}, 'Did not select a valid armature object')
         return False
 
+    # scale checks
     target_bone_names = []
     for bone in target_armature.data.bones:
         if bone.inherit_scale != "FULL":
@@ -256,10 +273,7 @@ def is_valid(self, context, ver, tuple):
         target_bone_names.append(bone.name)
 
     # TODO: Armature contains bone j_asi_b_l with unexpected scale: <Vector (1.0000, 1.0000, 1.0000)>
-    # for posebone in target_armature.pose.bones:
-    #     if posebone.scale != mathutils.Vector((1.0, 1.0, 1.0)):
-    #         self.report({'ERROR'}, f'Armature contains bone {posebone.name} with unexpected scale: {posebone.scale}')
-    #         return False
+    # check for scale that's 'close enough' to 1.0
 
     scale = tuple[0]
     missing_bones = []
@@ -270,15 +284,14 @@ def is_valid(self, context, ver, tuple):
         self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
         return False
     elif len(missing_bones) > 1:
-        self.report({'WARNING'}, f'Skipped missing bones: {", ".join(missing_bones)}')
+        self.report({'WARNING'}, f'Skipping missing bones: {", ".join(missing_bones)}')
+
+    # rotpos checks
 
     return True
 
 def is_valid_reset(self, context):
     settings: Settings = context.scene.bustomize_settings
-    # if not settings.was_applied:
-    #     self.report({'ERROR'}, 'Armature has not been scaled!')
-    #     return False
 
     # validate target armature
     target_armature = settings.target_armature
@@ -288,10 +301,7 @@ def is_valid_reset(self, context):
     if not target_armature.type == "ARMATURE":
         self.report({'ERROR'}, 'Did not select a valid armature object')
         return False
-    for bone in target_armature.data.bones:
-        if bone.inherit_scale != "NONE":
-            self.report({'ERROR'}, f'Armature has not been scaled!')
-            return False
+
     return True
 
 def dedupe(armature, dupe_bone):
