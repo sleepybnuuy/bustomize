@@ -133,7 +133,8 @@ class BustomizeRotPos(bpy.types.Operator):
             translation = pos_dict[posebone.name]
             rotation = rot_dict[posebone.name]
             if translation or rotation:
-                dupe(target_armature, posebone.bone)
+                if not dupe(target_armature, posebone.bone):
+                    self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
 
         # translate+rotate posebones
         for posebone in target_armature.pose.bones:
@@ -192,7 +193,8 @@ class BustomizeReset(bpy.types.Operator):
         for posebone in target_armature.pose.bones:
             # clean any generated bones
             if posebone.name.startswith('DUPE_'):
-                dedupe(target_armature, posebone.bone)
+                if not dedupe(target_armature, posebone.bone):
+                    self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
 
         # reset bones' scale, rotation inheritance; local vs global pos bool
         # reset posebone pose/rot/scale data
@@ -309,21 +311,31 @@ def dedupe(armature, dupe_bone):
     bpy.ops.object.editmode_toggle()
 
     # parent bones back to original to cleanup armature
-    dupe_edit_bone = armature.data.edit_bones[dupe_bone.name]
-    edit_bone = armature.data.edit_bones[dupe_bone.name[5:]]
+    try:
+        dupe_edit_bone = armature.data.edit_bones[dupe_bone.name]
+        edit_bone = armature.data.edit_bones[dupe_bone.name[5:]]
+    except Exception as e:
+        bpy.ops.object.editmode_toggle()
+        return False
+
     for child in dupe_edit_bone.children:
         child.parent = edit_bone
 
     armature.data.edit_bones.remove(dupe_edit_bone)
 
     bpy.ops.object.editmode_toggle()
-    return
+    return True
 
 def dupe(armature, bone):
     # temp enter edit mode to create dupe bone
     bpy.ops.object.editmode_toggle()
 
-    edit_bone = armature.data.edit_bones[bone.name]
+    try:
+        edit_bone = armature.data.edit_bones[bone.name]
+    except Exception as e:
+        bpy.ops.object.editmode_toggle()
+        return False
+
     dupe_edit_bone = armature.data.edit_bones.new(f'DUPE_{bone.name}')
     dupe_edit_bone.matrix = edit_bone.matrix.copy()
     dupe_edit_bone.length = edit_bone.length
@@ -334,7 +346,7 @@ def dupe(armature, bone):
         child.parent = dupe_edit_bone
 
     bpy.ops.object.editmode_toggle()
-    return
+    return True
 
 
 def register():
