@@ -78,10 +78,8 @@ class Bustomize(bpy.types.Operator):
         settings: Settings = context.scene.bustomize_settings
         version, cplus_dict = translate_hash(settings.cplus_hash)
         scale_dict = get_bone_values(cplus_dict, 'Scaling')
-        rot_dict = get_bone_values(cplus_dict, 'Rotation')
-        pos_dict = get_bone_values(cplus_dict, 'Translation')
 
-        if not is_valid(self, context, version, (scale_dict, rot_dict, pos_dict)):
+        if not is_valid(self, context, version, (scale_dict, None, None)):
             return {'CANCELLED'}
 
         target_armature = settings.target_armature
@@ -127,6 +125,9 @@ class BustomizeRotPos(bpy.types.Operator):
         pos_dict = get_bone_values(cplus_dict, 'Translation')
         rot_dict = get_bone_values(cplus_dict, 'Rotation')
         target_armature = settings.target_armature
+
+        if not is_valid(self, context, version, (None, rot_dict, pos_dict)):
+            return {'CANCELLED'}
 
         # create and parent DUPE_ bones
         for posebone in target_armature.pose.bones:
@@ -267,28 +268,35 @@ def is_valid(self, context, ver, tuple):
         return False
 
     # scale checks
-    target_bone_names = []
-    for bone in target_armature.data.bones:
-        if bone.inherit_scale != "FULL":
-            self.report({'ERROR'}, f'Armature contains bone {bone.name} which does not inherit parent bone scaling')
-            return False
-        target_bone_names.append(bone.name)
-
-    # TODO: Armature contains bone j_asi_b_l with unexpected scale: <Vector (1.0000, 1.0000, 1.0000)>
-    # check for scale that's 'close enough' to 1.0
-
     scale = tuple[0]
-    missing_bones = []
-    for bonescale_name in scale.keys():
-        if bonescale_name not in target_bone_names:
-            missing_bones.append(bonescale_name)
-    if len(missing_bones) == len(scale.keys()):
-        self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
-        return False
-    elif len(missing_bones) > 1:
-        self.report({'WARNING'}, f'Skipping missing bones: {", ".join(missing_bones)}')
+    if scale:
+        target_bone_names = []
+        for bone in target_armature.data.bones:
+            if bone.inherit_scale != "FULL":
+                self.report({'ERROR'}, f'Armature contains bone {bone.name} which does not inherit parent bone scaling')
+                return False
+            target_bone_names.append(bone.name)
+
+        # TODO: Armature contains bone j_asi_b_l with unexpected scale: <Vector (1.0000, 1.0000, 1.0000)>
+        # check for scale that's 'close enough' to 1.0
+
+        missing_bones = []
+        for bonescale_name in scale.keys():
+            if bonescale_name not in target_bone_names:
+                missing_bones.append(bonescale_name)
+        if len(missing_bones) == len(scale.keys()):
+            self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
+            return False
+        elif len(missing_bones) > 1:
+            self.report({'WARNING'}, f'Skipping missing bones: {", ".join(missing_bones)}')
 
     # rotpos checks
+    rotation = tuple[1]
+    position = tuple[2]
+    if rotation or position:
+        if not target_armature.visible_get():
+            self.report({'ERROR'}, f'Armature is not visible in viewport (may cause issues, unhide to resolve)')
+            return False
 
     return True
 
