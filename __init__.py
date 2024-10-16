@@ -129,13 +129,18 @@ class BustomizeRotPos(bpy.types.Operator):
         if not is_valid(self, context, version, (None, rot_dict, pos_dict)):
             return {'CANCELLED'}
 
-        # create and parent DUPE_ bones
+        # find bones to DUPE
+        dupable_posebones = []
         for posebone in target_armature.pose.bones:
             translation = pos_dict[posebone.name]
             rotation = rot_dict[posebone.name]
             if translation or rotation:
-                if not dupe(target_armature, posebone.bone):
-                    self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
+                dupable_posebones.append(posebone)
+
+        # create and parent DUPE_ bones
+        for posebone in dupable_posebones:
+            if not dupe(target_armature, posebone.bone):
+                self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
 
         # translate+rotate posebones
         for posebone in target_armature.pose.bones:
@@ -187,15 +192,19 @@ class BustomizeReset(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         settings: Settings = context.scene.bustomize_settings
+        target_armature = settings.target_armature
         if not is_valid_reset(self, context):
             return {'CANCELLED'}
 
-        target_armature = settings.target_armature
+        dedupable_posebones = []
         for posebone in target_armature.pose.bones:
-            # clean any generated bones
             if posebone.name.startswith('DUPE_'):
-                if not dedupe(target_armature, posebone.bone):
-                    self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
+                dedupable_posebones.append(posebone)
+
+        # clean any generated bones
+        for posebone in dedupable_posebones:
+            if not dedupe(target_armature, posebone.bone):
+                self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
 
         # reset bones' scale, rotation inheritance; local vs global pos bool
         # reset posebone pose/rot/scale data
