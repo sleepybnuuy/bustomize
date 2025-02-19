@@ -16,7 +16,7 @@ bl_info = {
     "author" : "sleepybnuuy",
     "description" : "customize+ to blender add-on",
     "blender" : (4, 0, 0),
-    "version" : (1, 1, 0),
+    "version" : (1, 1, 1),
     "location" : "View3D > Sidebar > bustomize Tab",
     "category" : "Rigging"
 }
@@ -232,13 +232,14 @@ def translate_hash(the_hasherrrr: str):
     bytes = base64.b64decode(the_hasherrrr)
     bytes_array = bytearray(bytes)
 
-    # TODO: this is 31 when c+ version should be 4. 'version' key in json is correct
-    version_byte = bytes_array[0]
+    decomp = zlib.decompress(bytes_array, zlib.MAX_WBITS|16)
 
-    json_str = zlib.decompress(bytes_array, zlib.MAX_WBITS|16).decode('utf-8')
+    version = decomp[0]
+    json_str = decomp.decode('utf-8')
     json_dict = json.loads(json_str[1:])
 
-    version = json_dict['Version']
+    # TODO: https://github.com/Aether-Tools/CustomizePlus/issues/46
+    # version = json_dict['Version']
 
     return version, json_dict
 
@@ -261,7 +262,7 @@ tuple = scale[0], rot[1], pos[2]
 '''
 def is_valid(self, context, ver, tuple):
     if ver != 4:
-        self.report({'ERROR'}, 'C+ string version {ver} incompatible; bustomize expects 4')
+        self.report({'ERROR'}, f'C+ string version {ver} incompatible; bustomize expects 4')
         return False
 
     settings: Settings = context.scene.bustomize_settings
@@ -375,11 +376,11 @@ def register():
     bpy.types.Scene.bustomize_settings = bpy.props.PointerProperty(type=Settings)
 
 def unregister():
-    bpy.utils.unregister_class(Bustomize)
-    bpy.utils.unregister_class(BustomizeRotPos)
-    bpy.utils.unregister_class(BustomizeReset)
-    bpy.utils.unregister_class(BustomizePanel)
     bpy.utils.unregister_class(Settings)
+    bpy.utils.unregister_class(BustomizePanel)
+    bpy.utils.unregister_class(BustomizeReset)
+    bpy.utils.unregister_class(BustomizeRotPos)
+    bpy.utils.unregister_class(Bustomize)
     del bpy.types.Scene.bustomize_settings
 
 if __name__ == "__main__":
