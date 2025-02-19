@@ -143,6 +143,7 @@ class BustomizeRotPos(bpy.types.Operator):
                 self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
 
         # translate+rotate posebones
+        # TODO: position first vs rotation first?
         for posebone in target_armature.pose.bones:
             # disable rotation inheritance from ALL bones
             posebone.bone.use_inherit_rotation = False
@@ -220,6 +221,7 @@ class BustomizeReset(bpy.types.Operator):
         settings.rotpos_was_applied = False
         return {'FINISHED'}
 
+# TODO: support applying scaling to multiple armatures
 class Settings(bpy.types.PropertyGroup):
     target_armature: bpy.props.PointerProperty(name='target armature object', type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE') # type: ignore
     cplus_hash: bpy.props.StringProperty(name='clipboard string from c+') # type: ignore
