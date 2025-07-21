@@ -23,8 +23,10 @@ caveats:
 - rotation+position functionality is still very WIP and likely misses the mark, but it should give you a decent picture of possible clipping
 
 ### NOTES
+7/21 note: several folks have reached out regarding usage of bustomize to create face sculpt mods. this does not work and is not endorsed - bustomize is not to be used with exporting meshes, and to do so would require applying the posed armature modifier and re-applying all involved weights. it's not a good idea!
+
 this project is not maintained or endorsed by the developers of customize+ -- it also depends entirely on them and their architecture, so please give them some love
 
 add-on made with blender_vscode by jacques lucke: https://github.com/JacquesLucke/blender_vscode
 
-for support: reach out to me on [bsky](https://bsky.app/profile/bwuny.bsky.social)
+for support: reach out to me on [bsky](https://bsky.app/profile/bwuny.heliosphe.re)
