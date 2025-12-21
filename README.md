@@ -4,7 +4,8 @@ customize+ to blender add-on ( aka **bustomize+** )
 see: https://github.com/Aether-Tools/CustomizePlus
 
 ### INSTALLATION
-download the latest release .zip and install the zip in blender 4.0+ thru `Edit > Preferences > Add-ons > Install...`
+you can use the [FFXIV-Blender-Plugins](https://github.com/ShinoMythmaker/FFXIV-Blender-Plugins) repository to download this addon and any updates through blender itself.
+alternatively, you can download the latest release .zip and install the zip in blender 4.2+ thru `Edit > Preferences > Add-ons > Install...`
 
 ### USAGE
 ![GIF 9-2-2024 4-07-14 PM](https://github.com/user-attachments/assets/2a74c52a-f1ba-42c4-9d3d-47c07057ae53)
