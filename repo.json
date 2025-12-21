@@ -14,8 +14,8 @@
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.2.0",
-      "blender_version_max": "",
-      "website": "",
+      "blender_version_max": "6.0.0",
+      "website": "https://github.com/sleepybnuuy/bustomize/",
       "permissions": {},
       "tags": [
         "Rigging"
