@@ -11,16 +11,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-bl_info = {
-    "name" : "bustomize",
-    "author" : "sleepybnuuy",
-    "description" : "customize+ to blender add-on",
-    "blender" : (4, 0, 0),
-    "version" : (1, 1, 1),
-    "location" : "View3D > Sidebar > bustomize Tab",
-    "category" : "Rigging"
-}
-
 import bpy
 import base64
 import json
@@ -53,15 +43,16 @@ class BustomizePanel(bpy.types.Panel):
         row.prop(settings, "flip_axes", text="", icon="CON_ROTLIKE")
 
         row = layout.row()
-        row.operator("object.bustomize", text="do bustomize (scale)")
+        row.operator("object.bustomize_scale", text="do bustomize (scale)")
         row = layout.row()
         row.operator("object.bustomize_rotpos", text="do bustomize (rot, pos)")
+        row.prop(settings, "application_order", text="", icon="CON_FOLLOWPATH")
         row = layout.row()
         row.operator("object.bustomize_reset", text="reset armature")
 
-class Bustomize(bpy.types.Operator):
+class BustomizeScale(bpy.types.Operator):
     bl_label = "bustomize"
-    bl_idname = "object.bustomize"
+    bl_idname = "object.bustomize_scale"
     bl_description = "apply c+ scale data to targeted armature"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -95,14 +86,15 @@ class Bustomize(bpy.types.Operator):
                 else:
                     posebone.scale = mathutils.Vector((scale_vector['X'], scale_vector['Y'], scale_vector['Z']))
 
+        evaluate_unsupported(self, cplus_dict)
         settings.scale_was_applied = True
         return {'FINISHED'}
 
 '''
 approach:
 1. any rot/pos modified bones should each have a DUPE_ bone created in the armature to which its original children are now parented
-2. translate original posebone with c+ values (pos_dict)
-3. disable rotation inheritance (use_inherit_rotation) and rotate original posebone with c+ values (rot_dict)
+2. disable rotation inheritance (use_inherit_rotation) and rotate original posebone with c+ values (rot_dict)
+3. translate original posebone with c+ values (pos_dict)
 '''
 class BustomizeRotPos(bpy.types.Operator):
     bl_label = "bustomize_rotpos"
@@ -140,41 +132,51 @@ class BustomizeRotPos(bpy.types.Operator):
         # create and parent DUPE_ bones
         for posebone in dupable_posebones:
             if not dupe(target_armature, posebone.bone):
-                self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
+                self.report({'INFO'}, f'could not operate on missing bone: {posebone.name}')
 
         # translate+rotate posebones
-        # TODO: position first vs rotation first?
         for posebone in target_armature.pose.bones:
             # disable rotation inheritance from ALL bones
             posebone.bone.use_inherit_rotation = False
 
             translation = pos_dict[posebone.name]
             rotation = rot_dict[posebone.name]
-            if translation:
-                if settings.flip_axes:
-                    posebone.location += mathutils.Vector((translation['Z'], translation['X'], translation['Y']))
-                else:
-                    posebone.location += mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
 
-            # apply euler rotations as quat to posebones
-            if rotation:
-                if settings.flip_axes:
-                    rot_radians = mathutils.Vector((
+            # invert application order if bool
+            if settings.application_order:
+                self._translate_bone(settings, posebone, translation)
+                self._rotate_bone(settings, posebone, rotation)
+            else:
+                self._rotate_bone(settings, posebone, rotation)
+                self._translate_bone(settings, posebone, translation)
+
+        evaluate_unsupported(self, cplus_dict)
+        settings.rotpos_was_applied = True
+        return {'FINISHED'}
+
+    def _rotate_bone(self, settings, posebone, rotation):
+        if rotation:
+            if settings.flip_axes:
+                rot_radians = mathutils.Vector((
                         math.radians(rotation['Z']),
                         math.radians(rotation['X']),
                         math.radians(rotation['Y'])
                     ))
-                else:
-                    rot_radians = mathutils.Vector((
-                        math.radians(rotation['X']),
-                        math.radians(rotation['Y']),
-                        math.radians(rotation['Z'])
-                    ))
-                euler_rot = mathutils.Euler(rot_radians, 'XYZ')
-                posebone.rotation_quaternion.rotate(euler_rot)
+            else:
+                rot_radians = mathutils.Vector((
+                    math.radians(rotation['X']),
+                    math.radians(rotation['Y']),
+                    math.radians(rotation['Z'])
+                ))
+            euler_rot = mathutils.Euler(rot_radians, 'XYZ')
+            posebone.rotation_quaternion.rotate(euler_rot)
 
-        settings.rotpos_was_applied = True
-        return {'FINISHED'}
+    def _translate_bone(self, settings, posebone, translation):
+        if translation:
+            if settings.flip_axes:
+                posebone.location += mathutils.Vector((translation['Z'], translation['X'], translation['Y']))
+            else:
+                posebone.location += mathutils.Vector((translation['X'], translation['Y'], translation['Z']))
 
 class BustomizeReset(bpy.types.Operator):
     bl_label = "bustomize"
@@ -205,7 +207,7 @@ class BustomizeReset(bpy.types.Operator):
         # clean any generated bones
         for posebone in dedupable_posebones:
             if not dedupe(target_armature, posebone.bone):
-                self.report({'WARNING'}, f'could not operate on missing bone: {posebone.name}')
+                self.report({'INFO'}, f'could not operate on missing bone: {posebone.name}')
 
         # reset bones' scale, rotation inheritance; local vs global pos bool
         # reset posebone pose/rot/scale data
@@ -221,14 +223,6 @@ class BustomizeReset(bpy.types.Operator):
         settings.rotpos_was_applied = False
         return {'FINISHED'}
 
-# TODO: support applying scaling to multiple armatures
-class Settings(bpy.types.PropertyGroup):
-    target_armature: bpy.props.PointerProperty(name='target armature object', type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE') # type: ignore
-    cplus_hash: bpy.props.StringProperty(name='clipboard string from c+') # type: ignore
-    flip_axes: bpy.props.BoolProperty(default=False, name='flip bone axes (toggle if your scaling applies weird)\ntypically, you should only use this with a problematic devkit skeleton') # type: ignore
-    scale_was_applied: bpy.props.BoolProperty(default=False) # type: ignore
-    rotpos_was_applied: bpy.props.BoolProperty(default=False) # type: ignore
-
 
 def translate_hash(the_hasherrrr: str):
     bytes = base64.b64decode(the_hasherrrr)
@@ -236,12 +230,11 @@ def translate_hash(the_hasherrrr: str):
 
     decomp = zlib.decompress(bytes_array, zlib.MAX_WBITS|16)
 
-    version = decomp[0]
+    # version = decomp[0]
     json_str = decomp.decode('utf-8')
     json_dict = json.loads(json_str[1:])
 
-    # TODO: https://github.com/Aether-Tools/CustomizePlus/issues/46
-    # version = json_dict['Version']
+    version = json_dict['Version']
 
     return version, json_dict
 
@@ -259,12 +252,30 @@ def get_bone_values(cplus_dict: dict, value_key: str):
         new_bones[key] = values
     return new_bones
 
+def evaluate_unsupported(self, cplus_dict: dict):
+    # PropagateTranslation, PropagateRotation, PropagateScale
+    # ChildScalingIndependent, ChildScaling
+    # TODO: handle these gracefully in future version
+    bones = cplus_dict["Bones"]
+    propagation_bones = []
+    childscale_bones = []
+    for bone in bones.keys():
+        if any((key in bones[bone] and bones[bone][key]) for key in ["PropagateTranslation", "PropagateRotation", "PropagateScale"]):
+            propagation_bones.append(bone)
+        if any((key in bones[bone] and bones[bone][key]) for key in ["ChildScalingIndependent", "ChildScaling"]):
+            childscale_bones.append(bone)
+
+    if propagation_bones:
+        self.report({'WARNING'}, f'UNSUPPORTED: C+ template bones have propagation (translation, rotation, or scale) enabled! Propagated bones: {", ".join(propagation_bones)}')
+    if childscale_bones:
+        self.report({'WARNING'}, f'UNSUPPORTED: C+ template bones have child scaling enabled! Child scaled bones: {", ".join(childscale_bones)}')
+
 '''
 tuple = scale[0], rot[1], pos[2]
 '''
 def is_valid(self, context, ver, tuple):
-    if ver != 4:
-        self.report({'ERROR'}, f'C+ string version {ver} incompatible; bustomize expects 4')
+    if ver > 5:
+        self.report({'ERROR'}, f'C+ template version {ver} incompatible; bustomize expects <= version 5')
         return False
 
     settings: Settings = context.scene.bustomize_settings
@@ -284,13 +295,7 @@ def is_valid(self, context, ver, tuple):
     if scale:
         target_bone_names = []
         for bone in target_armature.data.bones:
-            if bone.inherit_scale != "FULL":
-                self.report({'ERROR'}, f'Armature contains bone {bone.name} which does not inherit parent bone scaling')
-                return False
             target_bone_names.append(bone.name)
-
-        # TODO: Armature contains bone j_asi_b_l with unexpected scale: <Vector (1.0000, 1.0000, 1.0000)>
-        # check for scale that's 'close enough' to 1.0
 
         missing_bones = []
         for bonescale_name in scale.keys():
@@ -300,7 +305,7 @@ def is_valid(self, context, ver, tuple):
             self.report({'ERROR'}, f'Armature contains no matching bones to scale!')
             return False
         elif len(missing_bones) > 1:
-            self.report({'WARNING'}, f'Skipping missing bones: {", ".join(missing_bones)}')
+            self.report({'INFO'}, f'Will skip missing bones: {", ".join(missing_bones)}')
 
     # rotpos checks
     rotation = tuple[1]
@@ -369,8 +374,16 @@ def dupe(armature, bone):
     return True
 
 
+class Settings(bpy.types.PropertyGroup):
+    target_armature: bpy.props.PointerProperty(name='target armature object', type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE') # type: ignore
+    cplus_hash: bpy.props.StringProperty(name='clipboard string from c+') # type: ignore
+    flip_axes: bpy.props.BoolProperty(default=False, name='flip bone axes (toggle if your scaling applies weird)\ntypically, you should only use this with a problematic devkit skeleton') # type: ignore
+    application_order: bpy.props.BoolProperty(default=False, name='application order - enable to apply position first, then rotation') # type: ignore
+    scale_was_applied: bpy.props.BoolProperty(default=False) # type: ignore
+    rotpos_was_applied: bpy.props.BoolProperty(default=False) # type: ignore
+
 def register():
-    bpy.utils.register_class(Bustomize)
+    bpy.utils.register_class(BustomizeScale)
     bpy.utils.register_class(BustomizeRotPos)
     bpy.utils.register_class(BustomizeReset)
     bpy.utils.register_class(BustomizePanel)
@@ -382,7 +395,7 @@ def unregister():
     bpy.utils.unregister_class(BustomizePanel)
     bpy.utils.unregister_class(BustomizeReset)
     bpy.utils.unregister_class(BustomizeRotPos)
-    bpy.utils.unregister_class(Bustomize)
+    bpy.utils.unregister_class(BustomizeScale)
     del bpy.types.Scene.bustomize_settings
 
 if __name__ == "__main__":
