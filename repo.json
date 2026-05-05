@@ -7,7 +7,7 @@
       "id": "bustomize",
       "name": "bustomize",
       "tagline": "customize+ to blender plugin",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "type": "add-on",
       "maintainer": "sleepybnuuy",
       "license": [
@@ -20,9 +20,9 @@
       "tags": [
         "Rigging"
       ],
-      "archive_url": "https://github.com/sleepybnuuy/bustomize/releases/download/v1.1.2/bustomize-v1.1.2.zip",
-      "archive_size": 6184,
-      "archive_hash": "sha256:b1b0d327a7a7c78140e21581ae69f3517a6cd5f90b1d41dd0dfbe152cdb5b1d2"
+      "archive_url": "https://github.com/sleepybnuuy/bustomize/releases/download/v1.1.3/bustomize-v1.1.3.zip",
+      "archive_size": 6259,
+      "archive_hash": "sha256:18300468efc1670d6da04f3f737de0a58d78ada441a6873b6e32659deedcb4ab"
     }
   ]
 }
