@@ -274,8 +274,8 @@ def evaluate_unsupported(self, cplus_dict: dict):
 tuple = scale[0], rot[1], pos[2]
 '''
 def is_valid(self, context, ver, tuple):
-    if ver > 6:
-        self.report({'ERROR'}, f'C+ template version {ver} incompatible; bustomize expects <= version 6')
+    if ver > 7:
+        self.report({'ERROR'}, f'C+ template version {ver} incompatible; bustomize expects <= version 7')
         return False
 
     settings: Settings = context.scene.bustomize_settings
